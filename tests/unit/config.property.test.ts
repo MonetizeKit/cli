@@ -78,7 +78,7 @@ describe("config manager property tests", () => {
         expect(resolved.workspaceId).toBe(env.MONETIZEKIT_WORKSPACE ?? profile.workspaceId ?? "");
         expect(resolved.environment).toBe(env.MONETIZEKIT_ENV ?? profile.environment ?? "dev");
         expect(resolved.apiUrl).toBe(
-          env.MONETIZEKIT_API_URL ?? profile.apiUrl ?? "https://api.monetizekit.com",
+          env.MONETIZEKIT_API_URL ?? profile.apiUrl ?? "https://app.monetizekit.app",
         );
         expect(resolved.token).toBe(env.MONETIZEKIT_TOKEN ?? profile.tokenRef ?? "");
       }),
