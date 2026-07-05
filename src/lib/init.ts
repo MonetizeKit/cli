@@ -96,10 +96,10 @@ export async function scaffoldMonetizekitProject(
   await writeTextFile(
     envPath,
     [
-      "MONETIZEKIT_API_URL=https://api.monetizekit.com",
+      "MONETIZEKIT_API_URL=https://app.monetizekit.app",
       "MONETIZEKIT_WORKSPACE=",
       "MONETIZEKIT_ENV=dev",
-      "MONETIZEKIT_TOKEN=",
+      "MONETIZEKIT_API_KEY=",
       "",
     ].join("\n"),
   );
@@ -108,12 +108,11 @@ export async function scaffoldMonetizekitProject(
   await writeTextFile(
     sdkPath,
     [
-      "import { MonetizeKitClient } from \"@monetizekit/node\";",
+      "import { MonetizeKit } from \"@monetizekit/node\";",
       "",
-      "const client = new MonetizeKitClient({",
-      "  apiUrl: process.env.MONETIZEKIT_API_URL ?? \"https://api.monetizekit.com\",",
-      "  token: process.env.MONETIZEKIT_TOKEN ?? \"\",",
-      "  workspaceId: process.env.MONETIZEKIT_WORKSPACE ?? \"\",",
+      "const client = new MonetizeKit({",
+      "  apiKey: process.env.MONETIZEKIT_API_KEY ?? \"\",",
+      "  baseUrl: process.env.MONETIZEKIT_API_URL ?? \"https://app.monetizekit.app\",",
       "});",
       "",
       "void client;",

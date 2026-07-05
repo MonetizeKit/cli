@@ -24,7 +24,7 @@ export interface ResolvedProfile {
   token: string;
 }
 
-const DEFAULT_API_URL = "https://api.monetizekit.com";
+const DEFAULT_API_URL = "https://app.monetizekit.app";
 const DEFAULT_ENVIRONMENT = "dev";
 
 function getDefaultConfig(): CliConfig {

@@ -5,7 +5,7 @@ function trim(value: string | undefined): string | undefined {
   return normalized && normalized.length > 0 ? normalized : undefined;
 }
 
-const DEFAULT_APP_URL = "https://app.monetizekit.com";
+const DEFAULT_APP_URL = "https://app.monetizekit.app";
 
 /**
  * Resolve the MonetizeKit web app base URL used for browser sign-in.
