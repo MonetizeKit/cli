@@ -1,3 +1,4 @@
+import { applyMiddlewareScaffold } from "./deep-scaffold-middleware.js";
 import { applyProviderWrap } from "./deep-scaffold-provider-wrap.js";
 import type { ProjectType } from "./init.js";
 
@@ -41,5 +42,6 @@ export async function deepScaffoldProject(options: DeepScaffoldOptions): Promise
 
   const steps: DeepScaffoldStepResult[] = [];
   steps.push(await applyProviderWrap(options));
+  steps.push(await applyMiddlewareScaffold(options));
   return { supported: true, steps };
 }

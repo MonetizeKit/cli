@@ -16,6 +16,14 @@ const UNRECOGNIZED_LAYOUT_REASON = "unrecognized layout return shape";
 type FunctionLikeNode = FunctionDeclaration | FunctionExpression | ArrowFunction;
 
 export async function applyProviderWrap(options: DeepScaffoldOptions): Promise<DeepScaffoldStepResult> {
+  if (options.projectType !== "nextjs") {
+    return {
+      step: "providerWrap",
+      status: "skipped",
+      reason: "provider wrap only applies to Next.js App Router projects",
+    };
+  }
+
   const relativePath = await findAppRouterLayoutPath(options.projectRoot);
   if (!relativePath) {
     return {
