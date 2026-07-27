@@ -1,4 +1,5 @@
 import { applyMiddlewareScaffold } from "./deep-scaffold-middleware.js";
+import { applyProtectedExample } from "./deep-scaffold-protected-example.js";
 import { applyProviderWrap } from "./deep-scaffold-provider-wrap.js";
 import { applyWebhookRouteScaffold } from "./deep-scaffold-webhook-route.js";
 import type { ProjectType } from "./init.js";
@@ -45,5 +46,6 @@ export async function deepScaffoldProject(options: DeepScaffoldOptions): Promise
   steps.push(await applyProviderWrap(options));
   steps.push(await applyMiddlewareScaffold(options));
   steps.push(await applyWebhookRouteScaffold(options));
+  steps.push(await applyProtectedExample(options));
   return { supported: true, steps };
 }
