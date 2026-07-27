@@ -1,0 +1,66 @@
+{
+    "findings": [
+        {
+            "severity": "high",
+            "location": "src/lib/init.ts",
+            "title": "Scaffold generates insecure Stripe webhook verification with timing-unsafe comparison and missing timestamp binding",
+            "description": "The `monetizekit init --stripe` command generates a `webhook-handler.example.ts` file containing a `verifyStripeSignature` function with two critical security flaws: (1) it computes HMAC-SHA256 over the raw payload only instead of the Stripe-standard `${timestamp}.${payload}` format, and (2) it uses JavaScript `===` string comparison instead of `crypto.timingSafeEqual()`. The CLI's own internal library (`stripe-webhook.ts`) implements both correctly, but the scaffold code that users copy into their projects does not.",
+            "impact": "Users who base their production webhook handlers on the scaffolded example deploy with two vulnerabilities: (1) a timing side-channel on `===` that allows an attacker to progressively recover the webhook signing secret by measuring response times across many requests, and (2) since the HMAC is computed over payload-only instead of timestamp.payload, the generated function produces signatures incompatible with Stripe \u2014 leading developers to either fix the function (best case) or disable verification entirely (worst case). If developers adjust only the comparison to match Stripe format without switching to timingSafeEqual, the timing attack remains.",
+            "verified": true,
+            "status": "active",
+            "background_composer_id": "bc-d348fe7a-42a3-4ced-a785-9cd2ece9b62c",
+            "commit_hash": "11f14c6f5e3fc51d4d05c72463837001ab6a4340",
+            "detected_at_pst": "2026-07-27T10:45:18-07:00",
+            "reported_link": "",
+            "attack_path": "1. User runs `monetizekit init --stripe` to scaffold their Stripe integration.\n2. CLI generates `.monetizekit/stripe/webhook-handler.example.ts` with `verifyStripeSignature()` that uses `===` and omits timestamp from HMAC input.\n3. User copies or adapts this example for their production webhook endpoint.\n4. Attacker sends crafted webhook requests and measures response timing differences from the `===` comparison to extract the webhook signing secret byte-by-byte.\n5. With the recovered secret, attacker can forge arbitrary webhook payloads to trigger business logic (e.g., fake payment confirmations, subscription changes).",
+            "evidence": [
+                "src/lib/init.ts:128-141",
+                "src/lib/stripe-webhook.ts:16-44"
+            ],
+            "remediation": "Update the scaffold template in `src/lib/init.ts` to use `crypto.timingSafeEqual()` for comparison and compute HMAC over `${timestamp}.${payload}` to match Stripe's signing scheme. Ideally, reference or re-export the existing correct implementation from `src/lib/stripe-webhook.ts`.",
+            "poc_video_notes": "Video not feasible for this finding \u2014 it is a static code analysis issue in generated scaffold code. The timing side-channel requires thousands of precisely-timed HTTP requests to demonstrate, which is not suitable for a short PoC video."
+        },
+        {
+            "severity": "medium",
+            "location": "src/lib/stripe-webhook.ts",
+            "title": "Stripe webhook signature verification lacks timestamp tolerance enabling indefinite replay attacks",
+            "description": "The `verifyStripeWebhookSignature()` function in `stripe-webhook.ts` correctly includes the timestamp in the HMAC computation and uses `timingSafeEqual`, but it never validates that the timestamp is within an acceptable time window. Stripe's official SDK rejects signatures older than 300 seconds (5 minutes). This function accepts signatures with arbitrarily old timestamps, enabling replay attacks.",
+            "impact": "An attacker who captures a legitimate Stripe webhook request (through log access, network interception, or a compromised intermediary) can replay the exact same payload and signature header indefinitely. The verification function will return `true` regardless of how much time has passed. If this function is used as a reference implementation or directly in webhook handlers, replayed events could trigger duplicate business actions such as double-crediting accounts, re-provisioning subscriptions, or re-processing refunds.",
+            "verified": true,
+            "status": "active",
+            "background_composer_id": "bc-d348fe7a-42a3-4ced-a785-9cd2ece9b62c",
+            "commit_hash": "11f14c6f5e3fc51d4d05c72463837001ab6a4340",
+            "detected_at_pst": "2026-07-27T10:45:18-07:00",
+            "reported_link": "",
+            "attack_path": "1. Attacker obtains a valid Stripe webhook payload and its `Stripe-Signature` header (e.g., from application logs, a compromised proxy, or network capture).\n2. Attacker stores the payload and signature for later use \u2014 hours, days, or weeks later.\n3. Attacker replays the exact request (same payload, same `Stripe-Signature` header) to the webhook endpoint.\n4. `verifyStripeWebhookSignature()` extracts the original timestamp, recomputes HMAC, and confirms the signature is valid.\n5. No timestamp age check is performed, so the function returns `true`.\n6. The webhook handler processes the replayed event, causing duplicate business logic execution.",
+            "evidence": [
+                "src/lib/stripe-webhook.ts:16-44",
+                "src/lib/stripe-webhook.ts:29-33",
+                "src/commands/stripe/verify-webhook.ts:21-22"
+            ],
+            "remediation": "Add a `toleranceSeconds` parameter (defaulting to 300) to `verifyStripeWebhookSignature()`. After extracting the timestamp, compute `Math.abs(Date.now() / 1000 - timestamp)` and reject if it exceeds the tolerance. This matches Stripe's official SDK behavior.",
+            "poc_video_notes": "Video not feasible \u2014 this is a library-level verification logic gap. Demonstrating replay requires a running webhook server and network capture setup that exceeds the scope of a safe PoC."
+        },
+        {
+            "severity": "medium",
+            "location": "src/lib/redaction.ts",
+            "title": "Redaction filter missing Stripe secret and restricted key patterns allowing credential exposure in CLI output",
+            "description": "The stdout/stderr redaction filter in `redaction.ts` masks `mk_live_*`, `mk_test_*`, `pk_live_*`, `pk_test_*`, `whsec_*`, and `Bearer`/`Authorization` patterns, but does not mask Stripe secret keys (`sk_live_*`, `sk_test_*`) or Stripe restricted keys (`rk_live_*`, `rk_test_*`). The CLI accepts these key types via `stripe connect --key` and `MONETIZEKIT_STRIPE_KEY`, so they flow through the CLI processing pipeline.",
+            "impact": "If a Stripe secret or restricted key appears in CLI output (e.g., in a server error response echoed back, an unhandled exception stack trace, or future verbose logging), it will pass through stdout/stderr unmasked. Stripe secret keys (`sk_live_*`) grant full read/write access to a Stripe account including charges, customers, and refunds. Restricted keys (`rk_live_*`) grant scoped access. Exposed keys in logs, CI output, or piped command output could be harvested by attackers with access to those logs.",
+            "verified": true,
+            "status": "active",
+            "background_composer_id": "bc-d348fe7a-42a3-4ced-a785-9cd2ece9b62c",
+            "commit_hash": "11f14c6f5e3fc51d4d05c72463837001ab6a4340",
+            "detected_at_pst": "2026-07-27T10:45:18-07:00",
+            "reported_link": "",
+            "attack_path": "1. User runs `monetizekit stripe connect --key sk_live_XXXX` in a CI pipeline or with output logging enabled.\n2. The Stripe key is sent in the HTTP request body to the MonetizeKit API server.\n3. If the API server returns an error response that echoes the key, or if an unhandled exception includes the key in a stack trace, it flows to stdout/stderr.\n4. The redaction filter processes the output but does not match the `sk_live_*` or `rk_live_*` patterns.\n5. The full Stripe key appears in plaintext in CI logs, terminal output, or piped log files.\n6. An attacker with access to those logs (e.g., CI system compromise, shared log aggregator) obtains the Stripe key.",
+            "evidence": [
+                "src/lib/redaction.ts:3-11",
+                "src/commands/stripe/connect.ts:24-31",
+                "src/commands/stripe/set-webhook-secret.ts:23-27"
+            ],
+            "remediation": "Add the missing patterns to the `SECRET_PATTERNS` array in `redaction.ts`:\n```typescript\n/sk_live_[A-Za-z0-9_-]+/g,\n/sk_test_[A-Za-z0-9_-]+/g,\n/rk_live_[A-Za-z0-9_-]+/g,\n/rk_test_[A-Za-z0-9_-]+/g,\n```",
+            "poc_video_notes": "Video not feasible \u2014 demonstrating this requires a server that echoes back the Stripe key in error responses, which depends on server-side behavior outside the CLI codebase."
+        }
+    ]
+}
