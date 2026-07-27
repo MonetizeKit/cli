@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
+import { applyConfigPatch } from "../../src/lib/config-patch.js";
 import {
   ConfigManager,
   resolveProfile,
@@ -104,6 +105,87 @@ describe("config manager property tests", () => {
         }
       }),
       { numRuns: 100 },
+    );
+  });
+
+  // Feature: agent-mode-parity, Property: Config_Patch atomic write
+  it("writeAtomic() leaves no temp file behind and load() reflects the write exactly", () => {
+    fc.assert(
+      fc.property(STRICT_CLI_CONFIG_ARBITRARY, (config) => {
+        const dir = mkdtempSync(join(tmpdir(), "monetizekit-cli-config-atomic-"));
+        const configPath = join(dir, "config.yaml");
+
+        try {
+          const manager = new ConfigManager(configPath);
+          manager.writeAtomic(config);
+
+          expect(manager.load()).toEqual(config);
+          const leftoverTempFiles = readdirSync(dir).filter((name) => name.includes(".tmp-"));
+          expect(leftoverTempFiles).toEqual([]);
+          expect(statSync(configPath).mode & 0o777).toBe(0o600);
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      }),
+      { numRuns: 50 },
+    );
+  });
+
+  // Feature: agent-mode-parity, Property: Config_Patch validation failure never writes
+  it("never returns ok:true for a patch that produces an invalid config", () => {
+    const invalidPatchArbitrary = fc.oneof(
+      fc.record({ activeProfile: fc.integer() }),
+      fc.record({ profiles: fc.string() }),
+      fc.record({ telemetry: fc.record({ enabled: fc.string() }) }),
+    );
+
+    fc.assert(
+      fc.property(STRICT_CLI_CONFIG_ARBITRARY, invalidPatchArbitrary, (config, invalidPatch) => {
+        const result = applyConfigPatch(config, invalidPatch);
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.fieldErrors.length).toBeGreaterThan(0);
+        }
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("leaves the on-disk config file byte-for-byte unmodified when a patch fails validation", () => {
+    fc.assert(
+      fc.property(STRICT_CLI_CONFIG_ARBITRARY, (config) => {
+        const dir = mkdtempSync(join(tmpdir(), "monetizekit-cli-config-novalid-"));
+        const configPath = join(dir, "config.yaml");
+
+        try {
+          const manager = new ConfigManager(configPath);
+          manager.writeAtomic(config);
+          const before = readFileSync(configPath, "utf8");
+          const beforeMtime = statSync(configPath).mtimeMs;
+
+          const result = applyConfigPatch(config, { activeProfile: 12345 });
+          expect(result.ok).toBe(false);
+          // Command-level contract: writeAtomic is only ever invoked on the ok:true branch.
+
+          const after = readFileSync(configPath, "utf8");
+          expect(after).toBe(before);
+          expect(statSync(configPath).mtimeMs).toBe(beforeMtime);
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      }),
+      { numRuns: 50 },
+    );
+  });
+
+  it("applyConfigPatch does not mutate the config object passed in", () => {
+    fc.assert(
+      fc.property(STRICT_CLI_CONFIG_ARBITRARY, (config) => {
+        const snapshot = JSON.parse(JSON.stringify(config));
+        applyConfigPatch(config, { telemetry: { enabled: !config.telemetry?.enabled } });
+        expect(config).toEqual(snapshot);
+      }),
+      { numRuns: 50 },
     );
   });
 });
