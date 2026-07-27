@@ -51,6 +51,8 @@
     "@oclif/core": "^4.9.0",
     "@oclif/plugin-autocomplete": "^3.2.40",
     "@oclif/plugin-help": "^6.2.37",
+    "diff": "^9.0.0",
+    "ts-morph": "^28.0.0",
     "yaml": "^2.8.2"
   },
   "optionalDependencies": {
