@@ -1,3 +1,4 @@
+import { applyProviderWrap } from "./deep-scaffold-provider-wrap.js";
 import type { ProjectType } from "./init.js";
 
 export type DeepScaffoldStepStatus = "applied" | "already-present" | "skipped";
@@ -39,5 +40,6 @@ export async function deepScaffoldProject(options: DeepScaffoldOptions): Promise
   }
 
   const steps: DeepScaffoldStepResult[] = [];
+  steps.push(await applyProviderWrap(options));
   return { supported: true, steps };
 }
