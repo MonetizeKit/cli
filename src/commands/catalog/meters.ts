@@ -57,7 +57,8 @@ export default class CatalogMetersCommand extends BaseCommand {
       {
         api: this.api,
         output: this.output,
-        fail: (message, exitCode) => this.error(message, { exit: exitCode }),
+        agentMode: this.agentMode,
+        fail: (message, exitCode, remediation) => this.failStructured(exitCode, message, remediation),
       },
     );
   }

@@ -2,14 +2,24 @@ import type { Hook } from "@oclif/core";
 
 const WORKSPACE_FLAG_PATTERN = /^--workspace(=|$)/;
 
-function hasWorkspaceArgument(argv: string[]): boolean {
+export function hasWorkspaceArgument(argv: string[]): boolean {
   return argv.some((arg) => WORKSPACE_FLAG_PATTERN.test(arg));
+}
+
+/**
+ * Requirement 1.4/1.6 (TTY_Fallback): Agent_Mode generalizes this existing
+ * "refuse to prompt when not a TTY" pattern, so `--mode agent` must also
+ * trip this check even if `process.stdin`/`stdout` happen to report a TTY.
+ */
+export function hasAgentModeArgument(argv: string[]): boolean {
+  return argv.some((arg, index) => arg === "--mode=agent" || (arg === "--mode" && argv[index + 1] === "agent"));
 }
 
 const hook: Hook.Prerun = async function prerunHook() {
   const workspaceFromArgs = hasWorkspaceArgument(process.argv);
   const workspaceFromEnv = Boolean(process.env.MONETIZEKIT_WORKSPACE);
-  const isInteractive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const agentMode = hasAgentModeArgument(process.argv);
+  const isInteractive = !agentMode && Boolean(process.stdin.isTTY && process.stdout.isTTY);
 
   if (!workspaceFromArgs && !workspaceFromEnv && !isInteractive) {
     const error = new Error(
