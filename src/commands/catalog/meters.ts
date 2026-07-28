@@ -1,10 +1,13 @@
 import { Args, Flags } from "@oclif/core";
 
 import { BaseCommand } from "../../lib/base-command.js";
+import { CatalogObjectInputSchema } from "../../lib/catalog.js";
 import { runCatalogCrudCommand, type CatalogCrudAction } from "../../lib/catalog-crud.js";
 
 export default class CatalogMetersCommand extends BaseCommand {
   static summary = "Manage meter catalog objects";
+
+  static inputSchema = CatalogObjectInputSchema;
 
   static args = {
     action: Args.string({
@@ -50,6 +53,7 @@ export default class CatalogMetersCommand extends BaseCommand {
       },
       {
         from: flags.from,
+        inputJson: flags["input-json"],
         out: flags.out,
         dryRun: flags["dry-run"],
         yes: flags.yes,
@@ -59,6 +63,7 @@ export default class CatalogMetersCommand extends BaseCommand {
         output: this.output,
         agentMode: this.agentMode,
         fail: (message, exitCode, remediation) => this.failStructured(exitCode, message, remediation),
+        resolveInput: (schema, options) => this.resolveInput(schema, options),
       },
     );
   }

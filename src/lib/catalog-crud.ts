@@ -1,5 +1,8 @@
+import type { z } from "zod";
+
 import type { ApiClient } from "./api-client.js";
 import {
+  CatalogObjectInputSchema,
   createDryRunPreview,
   extractEtag,
   loadCatalogObjectFromFile,
@@ -8,6 +11,7 @@ import {
   resolveCatalogCollectionPath,
   resolveCatalogItemPath,
   resolveCatalogObjectId,
+  type CatalogObject,
   type CatalogResourceType,
   writeCatalogOutputFile,
 } from "./catalog.js";
@@ -24,6 +28,7 @@ export interface CatalogCrudArgs {
 
 export interface CatalogCrudFlags {
   from?: string;
+  inputJson?: string;
   out?: string;
   dryRun: boolean;
   yes: boolean;
@@ -34,6 +39,10 @@ export interface CatalogCrudRuntime {
   output: OutputManager;
   agentMode: boolean;
   fail: (message: string, exitCode: ExitCode, remediation?: string) => never;
+  resolveInput: <T>(
+    schema: z.ZodType<T>,
+    options: { inputJson: string | undefined; flagsCandidate: Record<string, unknown> | undefined },
+  ) => Promise<T>;
 }
 
 export async function runCatalogCrudCommand(
@@ -58,8 +67,7 @@ export async function runCatalogCrudCommand(
   }
 
   if (args.action === "create") {
-    const fromPath = requireFrom(flags.from, runtime);
-    const body = await loadCatalogObjectFromFile(fromPath);
+    const body = await resolveCatalogBody(flags, runtime);
     if (flags.dryRun) {
       runtime.output.result(
         createDryRunPreview({
@@ -80,8 +88,7 @@ export async function runCatalogCrudCommand(
   }
 
   if (args.action === "update") {
-    const fromPath = requireFrom(flags.from, runtime);
-    const body = await loadCatalogObjectFromFile(fromPath);
+    const body = await resolveCatalogBody(flags, runtime);
     const id = resolveCatalogObjectId(body) ?? args.id;
     if (!id) {
       runtime.fail(
@@ -154,6 +161,40 @@ export async function runCatalogCrudCommand(
     await runtime.api.delete(resolveCatalogItemPath(type, id), extractEtag(currentResponse.headers));
     await emitResult({ deleted: true, type, id }, flags.out, runtime.output);
   }
+}
+
+/**
+ * Requirement 2.7: `catalog * create/update` accept the object body either
+ * as `--input-json` or via the pre-existing `--from <file>` flag. Both are
+ * alternate sources for the same logical input, so combining them is a
+ * usage conflict, and either path is validated against the same
+ * `CatalogObjectInputSchema`.
+ */
+async function resolveCatalogBody(
+  flags: CatalogCrudFlags,
+  runtime: CatalogCrudRuntime,
+): Promise<CatalogObject> {
+  if (flags.inputJson !== undefined && flags.from) {
+    runtime.fail(
+      "--input-json cannot be combined with --from for this command's input.",
+      ExitCode.InvalidArguments,
+      "Supply either --input-json or --from, not both.",
+    );
+  }
+
+  if (flags.inputJson !== undefined) {
+    return runtime.resolveInput(CatalogObjectInputSchema, {
+      inputJson: flags.inputJson,
+      flagsCandidate: undefined,
+    });
+  }
+
+  const fromPath = requireFrom(flags.from, runtime);
+  const body = await loadCatalogObjectFromFile(fromPath);
+  return runtime.resolveInput(CatalogObjectInputSchema, {
+    inputJson: undefined,
+    flagsCandidate: body,
+  });
 }
 
 function requireId(

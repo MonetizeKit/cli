@@ -2,6 +2,8 @@ import { Flags } from "@oclif/core";
 
 import { BaseCommand } from "../../lib/base-command.js";
 import { resolveProfileWithEnvOverrides } from "../../lib/config.js";
+import { CustomerCreateInputSchema } from "../../lib/customers.js";
+import { ExitCode } from "../../lib/exit-codes.js";
 import { readObjectFile } from "../../lib/io.js";
 import { resolveProfileName } from "../../lib/profile.js";
 
@@ -11,13 +13,15 @@ function isProductionEnvironment(environment: string): boolean {
 }
 
 export default class CustomersCreateCommand extends BaseCommand {
-  static summary = "Create a sandbox customer from a JSON/YAML file";
+  static summary = "Create a sandbox customer from a JSON/YAML file or --input-json";
+
+  static inputSchema = CustomerCreateInputSchema;
 
   static flags = {
     ...BaseCommand.globalFlags,
     from: Flags.string({
       description: "Path to JSON/YAML customer definition",
-      required: true,
+      required: false,
     }),
     "idempotency-key": Flags.string({
       description: "Optional idempotency key",
@@ -45,7 +49,27 @@ export default class CustomersCreateCommand extends BaseCommand {
       return;
     }
 
-    const payload = await readObjectFile(flags.from);
+    if (flags["input-json"] === undefined && !flags.from) {
+      this.failStructured(
+        ExitCode.InvalidArguments,
+        "customers create requires --from <file> or --input-json.",
+        "Pass --from <file>, or --input-json '<json>' (or --input-json - for stdin).",
+      );
+    }
+
+    if (flags["input-json"] !== undefined && flags.from) {
+      this.failStructured(
+        ExitCode.InvalidArguments,
+        "--input-json cannot be combined with --from for this command's input.",
+        "Supply either --input-json or --from, not both.",
+      );
+    }
+
+    const payload = await this.resolveInput(CustomerCreateInputSchema, {
+      inputJson: flags["input-json"],
+      flagsCandidate: flags["input-json"] === undefined ? await readObjectFile(flags.from!) : undefined,
+    });
+
     const response = await this.api.post(
       "/api/v1/customers",
       payload,
