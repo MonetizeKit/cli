@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, extname } from "node:path";
 
 import YAML from "yaml";
+import { z } from "zod";
 
 import type { ApiClient } from "./api-client.js";
 
@@ -24,6 +25,14 @@ export interface CatalogSnapshot {
 }
 
 export type CatalogObject = Record<string, unknown>;
+
+/**
+ * Catalog object shape is server-defined and varies per resource type (plan,
+ * feature, addon, product, meter), so the Command_Input_Schema is
+ * intentionally permissive: it only asserts that `--input-json`/`--from`
+ * supplied a JSON object, leaving field-level validation to the API.
+ */
+export const CatalogObjectInputSchema = z.record(z.string(), z.unknown());
 
 export function isCatalogResourceType(value: string): value is CatalogResourceType {
   return CATALOG_RESOURCE_TYPES.includes(value as CatalogResourceType);

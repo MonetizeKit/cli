@@ -3,6 +3,7 @@ import { Flags } from "@oclif/core";
 
 import { BaseCommand } from "../../lib/base-command.js";
 import { buildApiKeysUrl, openBrowser, resolveWebAppUrl } from "../../lib/browser.js";
+import { ExitCode } from "../../lib/exit-codes.js";
 import { resolveProfileName, resolveTokenRef } from "../../lib/profile.js";
 
 const API_KEY_PREFIX = "mk_";
@@ -26,6 +27,15 @@ export default class AuthLoginCommand extends BaseCommand {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(AuthLoginCommand);
+
+    const isInteractive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    if (!flags.key && (this.agentMode || !isInteractive)) {
+      this.failStructured(
+        ExitCode.InvalidArguments,
+        "auth login requires --key when running non-interactively.",
+        "Pass --key <mk_...> with the API key created via the web app; this skips the browser/prompt flow.",
+      );
+    }
 
     const baseUrl = resolveWebAppUrl(flags.url);
     const apiKeysUrl = buildApiKeysUrl(baseUrl);
