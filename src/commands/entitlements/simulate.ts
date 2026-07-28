@@ -12,6 +12,10 @@ export const EntitlementsSimulateInputSchema = z.object({
 export default class EntitlementsSimulateCommand extends BaseCommand {
   static summary = "Simulate effective entitlement decision";
 
+  static description =
+    "Accepts customer/feature/context either as positional args/flags or as a single " +
+    "--input-json document (inline or `-` for stdin), never both.";
+
   static inputSchema = EntitlementsSimulateInputSchema;
 
   static args = {

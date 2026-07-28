@@ -15,6 +15,10 @@ function isProductionEnvironment(environment: string): boolean {
 export default class CustomersCreateCommand extends BaseCommand {
   static summary = "Create a sandbox customer from a JSON/YAML file or --input-json";
 
+  static description =
+    "Accepts the customer definition either via --from <file> or --input-json " +
+    "(inline or `-` for stdin), never both. Restricted to non-production environments.";
+
   static inputSchema = CustomerCreateInputSchema;
 
   static flags = {

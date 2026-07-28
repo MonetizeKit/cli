@@ -8,6 +8,10 @@ import { readObjectFile } from "../../lib/io.js";
 export default class CustomersUpdateCommand extends BaseCommand {
   static summary = "Update a customer from a JSON/YAML file or --input-json";
 
+  static description =
+    "Accepts the fields to update either via --from <file> or --input-json " +
+    "(inline or `-` for stdin), never both.";
+
   static inputSchema = CustomerUpdateInputSchema;
 
   static args = {

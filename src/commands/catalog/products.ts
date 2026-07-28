@@ -7,6 +7,10 @@ import { runCatalogCrudCommand, type CatalogCrudAction } from "../../lib/catalog
 export default class CatalogProductsCommand extends BaseCommand {
   static summary = "Manage product catalog objects";
 
+  static description =
+    "`create`/`update` accept the object body via --input-json (inline or `-` for stdin) " +
+    "or the pre-existing --from <file> flag, never both.";
+
   static inputSchema = CatalogObjectInputSchema;
 
   static args = {

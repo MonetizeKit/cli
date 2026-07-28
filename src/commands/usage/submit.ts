@@ -14,6 +14,10 @@ export const UsageSubmitInputSchema = z.object({
 export default class UsageSubmitCommand extends BaseCommand {
   static summary = "Submit a usage event";
 
+  static description =
+    "Accepts customer/meter/value either as positional args/flags or as a single " +
+    "--input-json document (inline or `-` for stdin), never both.";
+
   static inputSchema = UsageSubmitInputSchema;
 
   static args = {
