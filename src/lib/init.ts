@@ -1,8 +1,9 @@
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 
+import { renderUnifiedDiff, type DeepScaffoldFileDiff } from "./deep-scaffold-diff.js";
 import { readStructuredFile, writeTextFile, isRecord } from "./io.js";
 
 export type ProjectType = "nextjs" | "node" | "go" | "python" | "java" | "generic";
@@ -11,11 +12,13 @@ export interface InitScaffoldOptions {
   projectRoot: string;
   projectType: ProjectType;
   stripe: boolean;
+  dryRun: boolean;
 }
 
 export interface InitScaffoldResult {
   projectType: ProjectType;
   files: string[];
+  diffs: DeepScaffoldFileDiff[];
 }
 
 export interface SdkInstallResult {
@@ -72,79 +75,103 @@ export async function detectProjectType(projectRoot: string): Promise<ProjectTyp
 export async function scaffoldMonetizekitProject(
   options: InitScaffoldOptions,
 ): Promise<InitScaffoldResult> {
-  const files: string[] = [];
   const baseDir = ".monetizekit";
-  const readmePath = join(options.projectRoot, baseDir, "README.md");
-  const envPath = join(options.projectRoot, baseDir, ".env.example");
-  const sdkPath = join(options.projectRoot, baseDir, "sdk.example.ts");
-
-  await writeTextFile(
-    readmePath,
-    [
-      "# MonetizeKit scaffold",
-      "",
-      `Detected project type: ${options.projectType}`,
-      "",
-      "1. Set `MONETIZEKIT_API_URL`, `MONETIZEKIT_WORKSPACE`, and `MONETIZEKIT_TOKEN`.",
-      "2. Install the SDK via `monetizekit init sdk install`.",
-      "3. Run `monetizekit ci smoke` to validate setup.",
-      "",
-    ].join("\n"),
-  );
-  files.push(`${baseDir}/README.md`);
-
-  await writeTextFile(
-    envPath,
-    [
-      "MONETIZEKIT_API_URL=https://app.monetizekit.app",
-      "MONETIZEKIT_WORKSPACE=",
-      "MONETIZEKIT_ENV=dev",
-      "MONETIZEKIT_API_KEY=",
-      "",
-    ].join("\n"),
-  );
-  files.push(`${baseDir}/.env.example`);
-
-  await writeTextFile(
-    sdkPath,
-    [
-      "import { MonetizeKit } from \"@monetizekit/node\";",
-      "",
-      "const client = new MonetizeKit({",
-      "  apiKey: process.env.MONETIZEKIT_API_KEY ?? \"\",",
-      "  baseUrl: process.env.MONETIZEKIT_API_URL ?? \"https://app.monetizekit.app\",",
-      "});",
-      "",
-      "void client;",
-      "",
-    ].join("\n"),
-  );
-  files.push(`${baseDir}/sdk.example.ts`);
+  const plannedFiles: Array<{ relativePath: string; content: string }> = [
+    { relativePath: `${baseDir}/README.md`, content: renderScaffoldReadme(options.projectType) },
+    { relativePath: `${baseDir}/.env.example`, content: renderScaffoldEnvExample() },
+    { relativePath: `${baseDir}/sdk.example.ts`, content: renderScaffoldSdkExample() },
+  ];
 
   if (options.stripe) {
-    const stripePath = join(options.projectRoot, baseDir, "stripe", "webhook-handler.example.ts");
-    await writeTextFile(
-      stripePath,
-      [
-        "import crypto from \"node:crypto\";",
-        "",
-        "export function verifyStripeSignature(payload: string, signature: string, secret: string): boolean {",
-        "  const expected = crypto",
-        "    .createHmac(\"sha256\", secret)",
-        "    .update(payload)",
-        "    .digest(\"hex\");",
-        "  return signature === expected;",
-        "}",
-        "",
-      ].join("\n"),
-    );
-    files.push(`${baseDir}/stripe/webhook-handler.example.ts`);
+    plannedFiles.push({
+      relativePath: `${baseDir}/stripe/webhook-handler.example.ts`,
+      content: renderScaffoldStripeWebhookExample(),
+    });
+  }
+
+  const files: string[] = [];
+  const diffs: DeepScaffoldFileDiff[] = [];
+
+  for (const planned of plannedFiles) {
+    const absolutePath = join(options.projectRoot, planned.relativePath);
+    if (options.dryRun) {
+      const existing = await readExistingFile(absolutePath);
+      const { diff } = renderUnifiedDiff(planned.relativePath, existing, planned.content);
+      if (diff) {
+        diffs.push({ path: planned.relativePath, diff });
+      }
+    } else {
+      await writeTextFile(absolutePath, planned.content);
+    }
+
+    files.push(planned.relativePath);
   }
 
   return {
     projectType: options.projectType,
     files,
+    diffs,
   };
+}
+
+async function readExistingFile(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function renderScaffoldReadme(projectType: ProjectType): string {
+  return [
+    "# MonetizeKit scaffold",
+    "",
+    `Detected project type: ${projectType}`,
+    "",
+    "1. Set `MONETIZEKIT_API_URL`, `MONETIZEKIT_WORKSPACE`, and `MONETIZEKIT_TOKEN`.",
+    "2. Install the SDK via `monetizekit init sdk install`.",
+    "3. Run `monetizekit ci smoke` to validate setup.",
+    "",
+  ].join("\n");
+}
+
+function renderScaffoldEnvExample(): string {
+  return [
+    "MONETIZEKIT_API_URL=https://app.monetizekit.app",
+    "MONETIZEKIT_WORKSPACE=",
+    "MONETIZEKIT_ENV=dev",
+    "MONETIZEKIT_API_KEY=",
+    "",
+  ].join("\n");
+}
+
+function renderScaffoldSdkExample(): string {
+  return [
+    "import { MonetizeKit } from \"@monetizekit/node\";",
+    "",
+    "const client = new MonetizeKit({",
+    "  apiKey: process.env.MONETIZEKIT_API_KEY ?? \"\",",
+    "  baseUrl: process.env.MONETIZEKIT_API_URL ?? \"https://app.monetizekit.app\",",
+    "});",
+    "",
+    "void client;",
+    "",
+  ].join("\n");
+}
+
+function renderScaffoldStripeWebhookExample(): string {
+  return [
+    "import crypto from \"node:crypto\";",
+    "",
+    "export function verifyStripeSignature(payload: string, signature: string, secret: string): boolean {",
+    "  const expected = crypto",
+    "    .createHmac(\"sha256\", secret)",
+    "    .update(payload)",
+    "    .digest(\"hex\");",
+    "  return signature === expected;",
+    "}",
+    "",
+  ].join("\n");
 }
 
 export async function scaffoldCiTemplates(projectRoot: string): Promise<string[]> {
