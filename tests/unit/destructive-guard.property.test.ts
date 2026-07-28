@@ -68,4 +68,47 @@ describe("destructive guard property tests", () => {
       { numRuns: 100 },
     );
   });
+
+  // Feature: agent-mode-parity, Requirement 1.4/1.6: Agent_Mode always suppresses the prompt
+  it("treats agent mode as non-interactive regardless of the interactive flag", () => {
+    fc.assert(
+      fc.asyncProperty(
+        fc.boolean(),
+        fc.boolean(),
+        fc.boolean(),
+        async (yes, dryRun, interactive) => {
+          let promptCalled = false;
+
+          const result = await checkDestructiveGuard({
+            yes,
+            dryRun,
+            interactive,
+            agentMode: true,
+            prompt: async () => {
+              promptCalled = true;
+              return true;
+            },
+          });
+
+          expect(promptCalled).toBe(false);
+
+          if (dryRun) {
+            expect(result.reason).toBe("dry_run");
+            return;
+          }
+
+          if (yes) {
+            expect(result.proceed).toBe(true);
+            expect(result.reason).toBe("confirmed");
+            return;
+          }
+
+          expect(result.proceed).toBe(false);
+          expect(result.reason).toBe("missing_yes_flag");
+          expect(result.remediation).toContain("--yes");
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
 });

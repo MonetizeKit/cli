@@ -58,13 +58,13 @@ export default class CatalogImportCommand extends BaseCommand {
       const guard = await checkDestructiveGuard({
         yes: flags.yes,
         dryRun: false,
+        agentMode: this.agentMode,
         promptMessage:
           "Import will apply updates/deletes to remote catalog objects. Continue?",
       });
 
       if (!guard.proceed) {
-        this.error(guard.message ?? "Import cancelled.", { exit: guard.exitCode });
-        return;
+        this.failStructured(guard.exitCode, guard.message ?? "Import cancelled.", guard.remediation);
       }
     }
 

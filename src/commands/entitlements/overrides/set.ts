@@ -42,12 +42,12 @@ export default class EntitlementsOverridesSetCommand extends BaseCommand {
     const guard = await checkDestructiveGuard({
       yes: flags.yes,
       dryRun: false,
+      agentMode: this.agentMode,
       promptMessage: `Set override for ${args.customer}:${args.feature}?`,
     });
 
     if (!guard.proceed) {
-      this.error(guard.message ?? "Operation cancelled.", { exit: guard.exitCode });
-      return;
+      this.failStructured(guard.exitCode, guard.message ?? "Operation cancelled.", guard.remediation);
     }
 
     const response = await this.api.post("/api/v1/entitlements/overrides", {

@@ -1,10 +1,17 @@
 import { Args, Flags } from "@oclif/core";
 
 import { BaseCommand } from "../../lib/base-command.js";
+import { CatalogObjectInputSchema } from "../../lib/catalog.js";
 import { runCatalogCrudCommand, type CatalogCrudAction } from "../../lib/catalog-crud.js";
 
 export default class CatalogPlansCommand extends BaseCommand {
   static summary = "Manage plan catalog objects";
+
+  static description =
+    "`create`/`update` accept the object body via --input-json (inline or `-` for stdin) " +
+    "or the pre-existing --from <file> flag, never both.";
+
+  static inputSchema = CatalogObjectInputSchema;
 
   static args = {
     action: Args.string({
@@ -50,6 +57,7 @@ export default class CatalogPlansCommand extends BaseCommand {
       },
       {
         from: flags.from,
+        inputJson: flags["input-json"],
         out: flags.out,
         dryRun: flags["dry-run"],
         yes: flags.yes,
@@ -57,7 +65,9 @@ export default class CatalogPlansCommand extends BaseCommand {
       {
         api: this.api,
         output: this.output,
-        fail: (message, exitCode) => this.error(message, { exit: exitCode }),
+        agentMode: this.agentMode,
+        fail: (message, exitCode, remediation) => this.failStructured(exitCode, message, remediation),
+        resolveInput: (schema, options) => this.resolveInput(schema, options),
       },
     );
   }
