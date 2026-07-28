@@ -1,14 +1,29 @@
 import { Args, Flags } from "@oclif/core";
+import { z } from "zod";
 
 import { BaseCommand } from "../../lib/base-command.js";
+
+export const UsageSubmitInputSchema = z.object({
+  customer: z.string().min(1),
+  meter: z.string().min(1),
+  value: z.coerce.number(),
+  timestamp: z.string().min(1).optional(),
+  description: z.string().min(1).optional(),
+});
 
 export default class UsageSubmitCommand extends BaseCommand {
   static summary = "Submit a usage event";
 
+  static description =
+    "Accepts customer/meter/value either as positional args/flags or as a single " +
+    "--input-json document (inline or `-` for stdin), never both.";
+
+  static inputSchema = UsageSubmitInputSchema;
+
   static args = {
-    customer: Args.string({ description: "Customer ID", required: true }),
-    meter: Args.string({ description: "Meter ID", required: true }),
-    value: Args.string({ description: "Usage value", required: true }),
+    customer: Args.string({ description: "Customer ID", required: false }),
+    meter: Args.string({ description: "Meter ID", required: false }),
+    value: Args.string({ description: "Usage value", required: false }),
   };
 
   static flags = {
@@ -29,23 +44,28 @@ export default class UsageSubmitCommand extends BaseCommand {
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(UsageSubmitCommand);
-    const value = Number(args.value);
-    if (Number.isNaN(value)) {
-      this.error("value must be numeric", { exit: 2 });
-      return;
-    }
+    const input = await this.resolveInput(UsageSubmitInputSchema, {
+      inputJson: flags["input-json"],
+      flagsCandidate: {
+        customer: args.customer,
+        meter: args.meter,
+        value: args.value,
+        timestamp: flags.timestamp,
+        description: flags.description,
+      },
+    });
 
     const payload: Record<string, unknown> = {
-      customerId: args.customer,
-      meterId: args.meter,
-      value,
+      customerId: input.customer,
+      meterId: input.meter,
+      value: input.value,
     };
 
-    if (flags.timestamp) {
-      payload.timestamp = flags.timestamp;
+    if (input.timestamp) {
+      payload.timestamp = input.timestamp;
     }
-    if (flags.description) {
-      payload.description = flags.description;
+    if (input.description) {
+      payload.description = input.description;
     }
 
     const response = await this.api.post(

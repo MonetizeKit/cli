@@ -1,8 +1,15 @@
 import { confirm } from "@inquirer/prompts";
 
+import { ExitCode } from "./exit-codes.js";
+
 export interface DestructiveGuardOptions {
   yes: boolean;
   dryRun: boolean;
+  /**
+   * Requirement 1.4/1.6: Agent_Mode always suppresses the confirmation
+   * prompt, even if `process.stdin`/`stdout` happen to report a TTY.
+   */
+  agentMode?: boolean;
   interactive?: boolean;
   promptMessage?: string;
   prompt?: (message: string) => Promise<boolean>;
@@ -11,16 +18,18 @@ export interface DestructiveGuardOptions {
 
 export interface DestructiveGuardResult {
   proceed: boolean;
-  exitCode: number;
+  exitCode: ExitCode;
   reason: "dry_run" | "confirmed" | "missing_yes_flag" | "cancelled";
   message?: string;
+  remediation?: string;
 }
 
 export async function checkDestructiveGuard(
   options: DestructiveGuardOptions,
 ): Promise<DestructiveGuardResult> {
   const isInteractive =
-    options.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    !options.agentMode &&
+    (options.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY));
   const promptMessage =
     options.promptMessage ?? "This operation is destructive. Continue?";
   const prompt = options.prompt ?? ((message: string) => confirm({ message }));
@@ -29,7 +38,7 @@ export async function checkDestructiveGuard(
     options.onDryRun?.();
     return {
       proceed: false,
-      exitCode: 0,
+      exitCode: ExitCode.Success,
       reason: "dry_run",
     };
   }
@@ -37,7 +46,7 @@ export async function checkDestructiveGuard(
   if (options.yes) {
     return {
       proceed: true,
-      exitCode: 0,
+      exitCode: ExitCode.Success,
       reason: "confirmed",
     };
   }
@@ -45,9 +54,10 @@ export async function checkDestructiveGuard(
   if (!isInteractive) {
     return {
       proceed: false,
-      exitCode: 2,
+      exitCode: ExitCode.InvalidArguments,
       reason: "missing_yes_flag",
       message: "Destructive operation requires --yes in non-interactive mode.",
+      remediation: "Pass --yes to confirm and skip the interactive prompt.",
     };
   }
 
@@ -55,14 +65,14 @@ export async function checkDestructiveGuard(
   if (accepted) {
     return {
       proceed: true,
-      exitCode: 0,
+      exitCode: ExitCode.Success,
       reason: "confirmed",
     };
   }
 
   return {
     proceed: false,
-    exitCode: 2,
+    exitCode: ExitCode.InvalidArguments,
     reason: "cancelled",
     message: "Operation cancelled by user.",
   };

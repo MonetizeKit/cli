@@ -2,11 +2,13 @@ import YAML from "yaml";
 
 const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
 
+export type OutputFormat = "json" | "yaml" | "table";
+
 export interface OutputOptions {
   json: boolean;
   quiet: boolean;
   noColor: boolean;
-  output?: "json" | "yaml" | "table";
+  output?: OutputFormat;
 }
 
 export interface OutputWriters {
@@ -23,6 +25,10 @@ export class OutputManager {
     this.options = options;
     this.stdout = writers.stdout ?? ((chunk) => process.stdout.write(chunk));
     this.stderr = writers.stderr ?? ((chunk) => process.stderr.write(chunk));
+  }
+
+  jsonEnabled(): boolean {
+    return this.options.json || this.options.output === "json";
   }
 
   result(data: unknown, schemaVersion: string): void {

@@ -1,21 +1,33 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { z } from "zod";
 import YAML from "yaml";
 
-export interface CliConfig {
-  activeProfile: string;
-  profiles: Record<string, Profile>;
-  telemetry?: { enabled: boolean };
-}
+export const ProfileSchema = z.object({
+  workspaceId: z.string().optional(),
+  environment: z.string().optional(),
+  apiUrl: z.string().optional(),
+  tokenRef: z.string().optional(),
+});
+export type Profile = z.infer<typeof ProfileSchema>;
 
-export interface Profile {
-  workspaceId?: string;
-  environment?: string;
-  apiUrl?: string;
-  tokenRef?: string;
-}
+export const CliConfigSchema = z.object({
+  activeProfile: z.string(),
+  profiles: z.record(ProfileSchema),
+  telemetry: z.object({ enabled: z.boolean() }).optional(),
+});
+export type CliConfig = z.infer<typeof CliConfigSchema>;
 
 export interface ResolvedProfile {
   workspaceId: string;
@@ -97,6 +109,29 @@ export class ConfigManager {
       encoding: "utf8",
       mode: 0o600,
     });
+  }
+
+  /**
+   * Requirement 4.3: writes the config file atomically (temp file in the
+   * same directory, fsync'd, then renamed over the real path), so a crash or
+   * concurrent write during `config patch` never leaves a partially-written
+   * or corrupted config file. `save()` is left untouched for existing
+   * callers per `design.md`.
+   */
+  writeAtomic(config: CliConfig): void {
+    const dir = dirname(this.configPath);
+    mkdirSync(dir, { recursive: true });
+
+    const tempPath = join(dir, `.config.yaml.tmp-${process.pid}-${Date.now()}`);
+    const fd = openSync(tempPath, "w", 0o600);
+    try {
+      writeFileSync(fd, YAML.stringify(config));
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+
+    renameSync(tempPath, this.configPath);
   }
 
   getProfile(name?: string): Profile {

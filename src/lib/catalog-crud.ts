@@ -1,7 +1,8 @@
-import { checkDestructiveGuard } from "./destructive-guard.js";
+import type { z } from "zod";
+
 import type { ApiClient } from "./api-client.js";
-import type { OutputManager } from "./output.js";
 import {
+  CatalogObjectInputSchema,
   createDryRunPreview,
   extractEtag,
   loadCatalogObjectFromFile,
@@ -10,9 +11,13 @@ import {
   resolveCatalogCollectionPath,
   resolveCatalogItemPath,
   resolveCatalogObjectId,
+  type CatalogObject,
   type CatalogResourceType,
   writeCatalogOutputFile,
 } from "./catalog.js";
+import { checkDestructiveGuard } from "./destructive-guard.js";
+import { ExitCode } from "./exit-codes.js";
+import type { OutputManager } from "./output.js";
 
 export type CatalogCrudAction = "list" | "get" | "create" | "update" | "delete";
 
@@ -23,6 +28,7 @@ export interface CatalogCrudArgs {
 
 export interface CatalogCrudFlags {
   from?: string;
+  inputJson?: string;
   out?: string;
   dryRun: boolean;
   yes: boolean;
@@ -31,7 +37,12 @@ export interface CatalogCrudFlags {
 export interface CatalogCrudRuntime {
   api: ApiClient;
   output: OutputManager;
-  fail: (message: string, exitCode: number) => never;
+  agentMode: boolean;
+  fail: (message: string, exitCode: ExitCode, remediation?: string) => never;
+  resolveInput: <T>(
+    schema: z.ZodType<T>,
+    options: { inputJson: string | undefined; flagsCandidate: Record<string, unknown> | undefined },
+  ) => Promise<T>;
 }
 
 export async function runCatalogCrudCommand(
@@ -56,8 +67,7 @@ export async function runCatalogCrudCommand(
   }
 
   if (args.action === "create") {
-    const fromPath = requireFrom(flags.from, runtime);
-    const body = await loadCatalogObjectFromFile(fromPath);
+    const body = await resolveCatalogBody(flags, runtime);
     if (flags.dryRun) {
       runtime.output.result(
         createDryRunPreview({
@@ -78,11 +88,13 @@ export async function runCatalogCrudCommand(
   }
 
   if (args.action === "update") {
-    const fromPath = requireFrom(flags.from, runtime);
-    const body = await loadCatalogObjectFromFile(fromPath);
+    const body = await resolveCatalogBody(flags, runtime);
     const id = resolveCatalogObjectId(body) ?? args.id;
     if (!id) {
-      runtime.fail("`update` requires an object id in --from file or as positional id.", 2);
+      runtime.fail(
+        "`update` requires an object id in --from file or as positional id.",
+        ExitCode.InvalidArguments,
+      );
     }
 
     const currentResponse = await runtime.api.get<unknown>(resolveCatalogItemPath(type, id));
@@ -113,6 +125,23 @@ export async function runCatalogCrudCommand(
 
   if (args.action === "delete") {
     const id = requireId(args.id, runtime);
+
+    // Requirement 1.4: deleting a known id is unconditionally destructive, so
+    // the confirmation gate must fire before any network call — not after a
+    // fetch that Agent_Mode would otherwise have to wait on before failing.
+    if (!flags.dryRun) {
+      const guard = await checkDestructiveGuard({
+        yes: flags.yes,
+        dryRun: false,
+        agentMode: runtime.agentMode,
+        promptMessage: `Delete ${type.slice(0, -1)} "${id}"?`,
+      });
+
+      if (!guard.proceed) {
+        runtime.fail(guard.message ?? "Delete cancelled.", guard.exitCode, guard.remediation);
+      }
+    }
+
     const currentResponse = await runtime.api.get<unknown>(resolveCatalogItemPath(type, id));
     const current = normalizeObjectPayload(currentResponse.data);
 
@@ -129,19 +158,43 @@ export async function runCatalogCrudCommand(
       return;
     }
 
-    const guard = await checkDestructiveGuard({
-      yes: flags.yes,
-      dryRun: false,
-      promptMessage: `Delete ${type.slice(0, -1)} "${id}"?`,
-    });
-
-    if (!guard.proceed) {
-      runtime.fail(guard.message ?? "Delete cancelled.", guard.exitCode);
-    }
-
     await runtime.api.delete(resolveCatalogItemPath(type, id), extractEtag(currentResponse.headers));
     await emitResult({ deleted: true, type, id }, flags.out, runtime.output);
   }
+}
+
+/**
+ * Requirement 2.7: `catalog * create/update` accept the object body either
+ * as `--input-json` or via the pre-existing `--from <file>` flag. Both are
+ * alternate sources for the same logical input, so combining them is a
+ * usage conflict, and either path is validated against the same
+ * `CatalogObjectInputSchema`.
+ */
+async function resolveCatalogBody(
+  flags: CatalogCrudFlags,
+  runtime: CatalogCrudRuntime,
+): Promise<CatalogObject> {
+  if (flags.inputJson !== undefined && flags.from) {
+    runtime.fail(
+      "--input-json cannot be combined with --from for this command's input.",
+      ExitCode.InvalidArguments,
+      "Supply either --input-json or --from, not both.",
+    );
+  }
+
+  if (flags.inputJson !== undefined) {
+    return runtime.resolveInput(CatalogObjectInputSchema, {
+      inputJson: flags.inputJson,
+      flagsCandidate: undefined,
+    });
+  }
+
+  const fromPath = requireFrom(flags.from, runtime);
+  const body = await loadCatalogObjectFromFile(fromPath);
+  return runtime.resolveInput(CatalogObjectInputSchema, {
+    inputJson: undefined,
+    flagsCandidate: body,
+  });
 }
 
 function requireId(
@@ -152,7 +205,7 @@ function requireId(
     return id;
   }
 
-  runtime.fail("This action requires a catalog object id.", 2);
+  runtime.fail("This action requires a catalog object id.", ExitCode.InvalidArguments);
 }
 
 function requireFrom(
@@ -163,7 +216,7 @@ function requireFrom(
     return from;
   }
 
-  runtime.fail("This action requires --from <file>.", 2);
+  runtime.fail("This action requires --from <file>.", ExitCode.InvalidArguments);
 }
 
 async function emitResult(data: unknown, out: string | undefined, output: OutputManager): Promise<void> {
