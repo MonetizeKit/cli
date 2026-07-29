@@ -1,6 +1,6 @@
 {
   "name": "@monetizekit/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MonetizeKit CLI (monetizekit / mk) for catalog management, entitlement & usage operations, diagnostics, and CI integration.",
   "license": "MIT",
   "repository": {
