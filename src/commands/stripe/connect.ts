@@ -5,8 +5,9 @@ import { BaseCommand } from "../../lib/base-command.js";
 /**
  * Connect Stripe by providing a restricted (or secret) key. Idempotent — the
  * server upserts the (encrypted) credential, so re-running re-seals it. Enforces
- * the `settings:webhooks:manage` scope on your API key, and the connection is
- * recorded in the audit log (surface: cli) exactly like the UI.
+ * the `integrations:manage` scope (or the legacy `settings:webhooks:manage`) on
+ * your API key, and the connection is recorded in the audit log (surface: cli)
+ * exactly like the UI.
  */
 export default class StripeConnectCommand extends BaseCommand {
   static summary = "Connect Stripe with a restricted key (idempotent)";
