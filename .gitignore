@@ -4,3 +4,6 @@ oclif.manifest.json
 *.log
 .DS_Store
 *.tgz
+.env
+.env.*
+!.env.example
