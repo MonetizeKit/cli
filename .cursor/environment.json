@@ -1,0 +1,4 @@
+{
+  "name": "@monetizekit/cli",
+  "install": "pnpm install --frozen-lockfile"
+}
