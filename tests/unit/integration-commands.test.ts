@@ -15,7 +15,7 @@ import IntegrationsListCommand from "../../src/commands/integrations/list.js";
 import { BaseCommand } from "../../src/lib/base-command.js";
 
 /**
- * Tri-surface integration parity (FRD-PO-006): the clerk / posthog /
+ * Tri-surface integration parity (FRD-PO-013, ex FRD-PO-006): the clerk / posthog /
  * integrations command groups must exist, extend BaseCommand (auth, output,
  * global flags), and declare the inputs the REST contract requires.
  */
