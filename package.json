@@ -2,7 +2,7 @@
   "name": "@monetizekit/cli",
   "version": "0.1.0",
   "description": "MonetizeKit CLI (monetizekit / mk) for catalog management, entitlement & usage operations, diagnostics, and CI integration.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/MonetizeKit/cli.git"
@@ -14,6 +14,7 @@
     "mk": "./bin/run.js"
   },
   "files": [
+    "NOTICE",
     "/bin/run.js",
     "/dist",
     "/oclif.manifest.json"
