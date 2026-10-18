@@ -1,5 +1,11 @@
 # @monetizekit/cli
 
+## 0.2.1
+
+### Patch Changes
+
+- 25326b9: Relicense from MIT to Apache-2.0; ship LICENSE and NOTICE files in the npm package (copyright Coordinated App LLC, d/b/a MonetizeKit).
+
 ## 0.2.0
 
 ### Minor Changes
