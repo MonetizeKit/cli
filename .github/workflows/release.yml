@@ -12,6 +12,7 @@ jobs:
   release:
     uses: MonetizeKit/.github/.github/workflows/reusable-sdk-release.yml@v1
     permissions:
+      actions: write
       contents: write
       pull-requests: write
       id-token: write
