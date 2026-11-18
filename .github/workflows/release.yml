@@ -1,15 +1,20 @@
-# Thin caller for the org reusable Changesets release (npm provenance enabled).
-# NPM_TOKEN is synced from Phase.dev into the Production GitHub Environment.
+# Thin caller for the org reusable Changesets release. Publishing uses npm
+# trusted publishing (OIDC): the package's trusted publisher on npmjs.com must
+# name this repository, this file (`release.yml`) and the environment
+# `Production`. workflow_dispatch re-runs a release from main once the
+# 30-day re-run window of the triggering push has passed.
 name: Release
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency: release-${{ github.ref }}
 
 jobs:
   release:
+    if: github.ref == 'refs/heads/main'
     uses: MonetizeKit/.github/.github/workflows/reusable-sdk-release.yml@v1
     permissions:
       actions: write
